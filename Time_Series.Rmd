@@ -12,13 +12,13 @@ output:
 
 #### 1. Introduction
 
-Today we'll take a quick look at R's functions for looking at time series data. This document covers:
+This document covers some of R's functions for looking at time series data. It includes:
 
-- A reminder of connecting to the TfL API from Reka's session <https://rawgit.com/maczokni/rest-api-through-firewall/gh-pages/tutorial.html>
+- Connecting to the TfL API as shown here: <https://rawgit.com/maczokni/rest-api-through-firewall/gh-pages/tutorial.html>
 
-- A reminder of using the dplyr package
+- Using the dplyr package
 
-- How to read in multiple years
+- How to read in multiple years from the API
 
 - Using the 'date' format in R
 
@@ -26,7 +26,7 @@ Today we'll take a quick look at R's functions for looking at time series data. 
 
 - forecasting from this object.
 
-We need the following packages. If you don't have them use the install.packages() function now.
+We need the following packages. If you don't have them use the install.packages() function first to download them from CRAN.
 
 ```{r, warning= F, message=F}
 library(dygraphs); library(jsonlite); library(dplyr);library(zoo); library(forecast)
@@ -35,7 +35,7 @@ library(dygraphs); library(jsonlite); library(dplyr);library(zoo); library(forec
 
 #### 2. Data
 
-We're going to connect to the TfL API again and extract collision data. As per last week we need to create object for our ID, Key and year we want. I'm using my appkey and id here but please use your own. 
+We're going to connect to the TfL API again and extract collision data. As per last week we need to create object for our ID, Key and year we want. 
 
 Because we are interested in seeing the shape of collisiona over time we're going to need more than one year. We therefore create a list object **d_list** and the run a for loop to call three years from 2013 to 2015 from the api.
 
@@ -80,15 +80,15 @@ for (i in c("2013","2014","2015")){
 }
 ```
 
-We now need to collapse these lists into a single data frame. Luckily the dplyr package has a function to do this.
+We then collapse the listed objects into a single data frame. Luckily the dplyr package has a function to do this.
 
 ```{r}
  d<- rbind_all(d_list)
 ```
 
-If we now `View(d)` we should see the data frame.
+If we now type `View(d)` we should see the data frame.
 
-We have some columns we don't need for now such as the casualty list. The date is in an oddly concatenated character string. Let's remove the columns we're not interested in using the select() function in dplyr and then get the date information out in a format we can use.
+We have some columns we don't need for now such as the casualty list. We also note that the date is in an oddly concatenated character string. Let's remove the columns we're not interested in using the select() function in dplyr and then get the date  into a format we can use.The substr() function takes the positions in the string we want to take counting from the right.
 
 ```{r}
  d_clean<-d%>% select(id, lat,lon, location, dateandTime=date, severity, borough)
@@ -98,7 +98,7 @@ d_clean$date<-substr(d_clean$date,1,10)
 head(d_clean$date)
 ```
 
-R won't recognise our date field automatically so we need to tell it it's a date. This requires the as.Date() function. Querying ?strptime gives us a list of the characters and paramaters we need to use. We check the class before and after as a demonstration.
+R won't recognise our date field automatically so we need to tell it it's a date. This requires the as.Date() function. If we query by executing `?strptime` it gives us a list of the characters and paramaters we need to use. We check the class before and after as a demonstration.
 
 
 ```{r}
@@ -111,7 +111,7 @@ class(d_clean$date)
 
 ```
 
-For our time series we are going to group the data by month and year. R is a little bit annoying with sorting date data so we create a new year month column.
+For our time series we are going to group the data by month and year. R is a little bit fiddly with sorting date data. We first need to create a new year and month column.
 
 ```{r}
 d_clean$yearMonth<-format(d_clean$date, "%Y-%m")
@@ -119,7 +119,7 @@ d_clean$yearMonth<-format(d_clean$date, "%Y-%m")
 class(d_clean$yearMonth)
 ```
 
-You'll notice it's reverted back into a character vector so let's use the zoo package to tell R we want a Year and month column as a date. It will place a 01 day suffix day to do this.
+You'll notice it's reverted back into a character vector so let's use the zoo package to tell R we want a Year and month column as a date. It will place a 01 day suffix to do this.
 
 ```{r}
 
@@ -129,9 +129,9 @@ d_clean$yearMonth<-as.Date(as.yearmon(d_clean$yearMonth))
 class(d_clean$yearMonth)
 ```
 
-It's also reverted back to a date - yay.
+It's also reverted back to a date - which is good.
 
-OK for now we're going to concentrate on looking at collisions which resulted in a killed or serious injury (KSI). We need to extract those that resulted in a fatal or serious injury. There are three ways of doing this, we can use the subset() function, or index from the data frame, data[x == "",] but we're going to use the filter() function from the dplyr and create a new variable `d_clean_KSI`.
+OK for now we're going to concentrate on looking at collisions which resulted in a killed or serious injury (KSI). We need to extract those that resulted in a fatal or serious injury. There are three ways of doing this, we can use the subset() function, or subset through indexing from the data frame, data[x == "",] however we're going to use the filter() function from the dplyr and create a new variable `d_clean_KSI`.
 
 ```{r}
 d_clean_KSI<- d_clean%>% filter(severity == "Serious" | severity == "Fatal")
@@ -153,7 +153,7 @@ To create the time series we just need the vector of values per month, so we'll 
 ksi_cols<-as.vector(table(d_clean_KSI$yearMonth))
 ```
 
-Now let's create a time series object in R, ts(). We need to specify our start and end dates and also the frequency of intervals. If you put 12, the object will assume you are working in months.
+Now let's create a time series object in R, ts(). We need to specify our start and end dates and also the frequency of intervals. If you put 12, the object should automatically assume you are working in months.
 
 ```{r}
 ksi_ts<-ts(data =ksi_cols, start = c(2013,1) , end =c(2015,12), frequency= 12)
@@ -168,13 +168,13 @@ plot(ksi_ts, col = "blue", lwd =2, ylab = "KSI",
 grid()
 ```
 
-Or if we're feeling fancy we can also build in a html widget using the dygraphs package for a bit more interactivity. Plus it fixes the odd y axis labelling.
+Or if we're feeling a bit fancy we can also build in a html widget using the dygraphs package for a bit more interactivity. Plus it fixes the odd x axis labelling.
 
 ```{r}
 dygraph(ksi_ts)
 ```
 
-It looks like there might be some trend in the data but it's hard to pull apart with the noise and. To check we can use a function in R called decompose() which will pull the time series into it components parts. We then use the plot function to see what this looks like.
+It looks like there might be some trend in the data but it's hard to see through the noise. To check we can use a function in R called decompose() which will pull the time series into it components parts. We then use the plot function to see what this looks like.
 
 ```{r}
 ksi_decomp<- decompose(ksi_ts)
@@ -183,7 +183,7 @@ plot(ksi_decomp)
 
 The plot is divided into four parts, the observed data, a moving average trend, a seasonal component and the random element. You'll notice the model has defaulted to **Additive**. This basically means we expect the seasonaility to remain constant with the trend. The alternative would be to use a **Multiplicative** model where seasonaility increases with trend. This can be  specified through `decompose(x, type = "multiplicative")`. I would say this data is a good candidate for using the multiplicative model decomposition instead but we will stick to additive for this example.
 
-There appears to be definite seasonality in the data. We can look at the seasonal components as follows.
+There appears to be seasonality in the data. We can check the seasonal components as follows.
 
 ``` {r}
 ksi_decomp$seasonal
@@ -203,7 +203,7 @@ Box.test(ksi_ts)
 Acf(ksi_ts)
 ```
 
-We see no evidence of autocorrelation in either result. The test is non-significant so we fail to reject the null hypothesis that observation are independent and the plot does not show any auto-correlation in the lags (with the exception of one that looks like a chance observation).
+We see no evidence of autocorrelation in either result. The test is non-significant so we fail to reject the null hypothesis that observation are independent. This is confiremd by the plot not showing any auto-correlation in the lags (with the exception of one that looks like a chance observation).
 
 <br>
 
@@ -217,15 +217,15 @@ First let's base our forecast on the **mean** of the data. That's right we're ju
 meanf(ksi_ts, h =6)
 ```
 
-You'll notice you'll get the same prediction for the next six months with confidence intervals. This is the same as using a control chart. The problem with using the mean of course is we have both trend and seasonality in our data which this fails to address.
+You'll notice you'll get the same prediction for the next six months with confidence intervals. This is the similar to as using a standard control chart. The problem with the mean of course is it fail to address either trend or seasonality in the data.
 
-OK next, we'll try a **naive forecast** taking just the last observed value.
+OK next, we'll use the **naive forecast** taking just the last observed value.
 
 ```{r}
 snaive(ksi_ts, h =6)
 ```
 
-This might be slightly better but again ignores trend and seasonality.
+This might be slightly better in some circumstances but again ignores trend and seasonality.
 
 Next is the **seasonally naive** forecast.
 
@@ -249,4 +249,3 @@ Finally an alternative and recommended package for manipulating date data is the
 
 I hope this was useful.
 
-Send questions to kerrycella@tfl.gov.uk or of course post them on our intranet forum page!.
